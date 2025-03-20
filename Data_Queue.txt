@@ -1,0 +1,133 @@
+//LAB 3 Shell Code
+//Shemar Moore Lab03 Code
+// includes
+#include	"FreeRTOS.h"
+#include 	"task.h"
+#include 	"queue.h"
+#include 	"xil_printf.h"
+#include 	"xparameters.h"
+#include 	"xgpio.h"
+#include	"xstatus.h"
+
+
+// defines
+#define BTNSW_DEVICE_ID 	XPAR_AXI_GPIO_0_DEVICE_ID
+#define LED_DEVICE_ID 		XPAR_AXI_GPIO_1_DEVICE_ID
+#define BTN_CHANNEL	1
+#define SW_CHANNEL 	2
+#define LED_CHANNEL	1
+
+
+// global variables
+static TaskHandle_t TaskQueueSend; // FreeRTOS task handle
+static TaskHandle_t TaskQueueReceive; // FreeRTOS task handle
+static QueueHandle_t xQueueBtnSw; // FreeRTOS queue handle
+
+XGpio LedInst; // GPIO device driver instance
+XGpio BtnSwInst; // GPIO device driver instance
+
+int btn_config;
+int sw_config;
+int led_output=0b0000;
+int value = 0;
+int LEDvalue = 1;
+
+// function declarations
+int initialize();
+static void TaskSend(void *pvParameters);
+static void TaskReceive(void *pvParameters);
+
+
+// *********************************MAIN ***************************************
+int main(void) {
+
+// Run Initialization
+if (initialize() != XST_SUCCESS) {
+xil_printf("GPIO setup failed!\r\n");
+}
+
+//Create Tasks and Start Scheduler
+xTaskCreate(vTaskQueueSend, "send",100,NULL,&TaskSend);
+xTaskCreate(vTaskQueueReceive,"receive", 1000,NULL,&TaskReceive);
+xQueueBtnSw = xQueueCreate(4, sizeof(int));
+vTaskStartScheduler();
+
+}
+
+
+
+// **********************Initialize********************************
+int initialize() {
+int status;
+
+// Initialize LEDs (GPIO driver initialization)
+status = XGpio_Initialize(&LedInst, LED_DEVICE_ID);
+if (status != XST_SUCCESS)
+return XST_FAILURE;
+
+// Initialize Push Buttons and Switches (GPIO driver initialization)
+status = XGpio_Initialize(&BtnSwInst, BTNSW_DEVICE_ID);
+if (status != XST_SUCCESS)
+return XST_FAILURE;
+
+// Set LED directions to output
+XGpio_SetDataDirection(&LedInst, LED_CHANNEL, 0x00);
+
+// Set button directions to input
+XGpio_SetDataDirection(&BtnSwInst, BTN_CHANNEL, 0xFF);
+
+// Set switch directions to input
+XGpio_SetDataDirection(&BtnSwInst, SW_CHANNEL, 0xFF);
+return XST_SUCCESS;
+}
+
+
+
+// *********************TaskQueueSend*********************************
+static void TaskQueueSend(void *pvParameters) {
+
+while (1) {
+
+//Send Logic
+btn_config=xgpio_DiscreteRead(&BtnSwInst, BTN_CHANNEL);
+sw_config=xgpio_DiscreteRead(&BtnSwInst, SW_CHANNEL);
+
+if(btn_config==0b0001 && led_output!=0b1111){
+	xqueuesend(xQueueBtnSw, (void *)&LEDvalue, 100);
+	led_output = led_output<<1;
+	led_output = led_output +1;
+	for(int delay = 0; delay<limit;delay++);
+}
+
+
+if(sw_config==0b0001){
+led_output=0b0000;
+xQueueReset(xQueueBtnSw);
+}
+
+XGpio_DiscreteWrite(&LedInst, LED_CHANNEL, led_output);
+
+
+}
+
+}
+
+
+// *************************TaskQueueReceive*********************************
+static void TaskQueueReceive(void *pvParameters) {
+
+while (1) {
+
+//Receive Logic
+btn_config=xgpio_DiscreteRead(&BtnSwInst, BTN_CHANNEL);
+
+if(btn_config==0b0010 && led_output!=0b0000){
+xQueueReceive(xQueueBtnSw, (void *)&LEDvalue, 100);
+led_output = led_output>>1;
+for(int delay = 0; delay<limit;delay++);
+}
+
+xGpio_DiscreteWrite(&LedInst, LED_CHANNEL, led_output);
+
+}
+}

@@ -1,0 +1,120 @@
+//Shemar's code, 2/10
+
+/* FreeRTOS includes. */
+#include "FreeRTOS.h"
+#include "task.h"
+#include "xparameters.h"
+#include "xgpio.h"
+#include "xstatus.h"
+#include "xil_printf.h"
+/* Definitions */
+#define INPUT_DEVICE_ID XPAR_AXI_GPIO_0_DEVICE_ID
+#define LED_DEVICE_ID XPAR_AXI_GPIO_1_DEVICE_ID
+#define LED_CHANNEL 1
+#define BTN_CHANNEL 1
+#define SW_CHANNEL 2
+#define printf xil_printf
+#define DELAY_1_SECOND 1000UL
+#define DELAY_5_SECOND 5000UL
+
+XGpio LEDInst, InputInst;
+static void taskLED( void *taskLEDParams );
+static void taskBTN( void *taskBTNParams );
+static void taskSWS( void *taskSWSParams);
+static TaskHandle_t taskHandleLED;
+static TaskHandle_t taskHandleBTN;
+static TaskHandle_t taskHandleSWS;
+
+
+int main( void ) {
+ int Status;
+ Status = XGpio_Initialize(&LEDInst, LED_DEVICE_ID);
+ if (Status != XST_SUCCESS) {
+ return XST_FAILURE;
+ }
+ Status = XGpio_Initialize(&InputInst, INPUT_DEVICE_ID);
+ if (Status != XST_SUCCESS) {
+ return XST_FAILURE;
+ }
+ XGpio_SetDataDirection(&LEDInst, LED_CHANNEL, 0x00);
+ XGpio_SetDataDirection(&InputInst, BTN_CHANNEL, 0xFF);
+ XGpio_SetDataDirection(&InputInst, SW_CHANNEL, 0xFF);
+ xTaskCreate(taskLED,
+ (const char *) "LED Task",
+ 1000,
+ NULL,
+ tskIDLE_PRIORITY + 1,
+ &taskHandleLED);
+ xTaskCreate(taskBTN, (const char *) "LED Task", 1000, NULL, tskIDLE_PRIORITY + 1,
+&taskHandleBTN);
+ xTaskCreate(taskSWS, (const char *) "LED Task", 1000, NULL, 1, &taskHandleSWS);
+ /* Start the tasks. */
+ vTaskStartScheduler();
+ for( ;; );
+}
+
+int led_data = 0;
+int switch_data;
+int button_data;
+int output = 0;
+
+static void taskLED( void *taskLEDParams ) {
+ const TickType_t x1SecondInTicks = pdMS_TO_TICKS( DELAY_1_SECOND );
+ /* Declare variables */
+ for( ;; ) {
+	 if((switch_data & 0b0001) == 0b0000){
+		 led_data = led_data+1;
+		 output = led_data;
+		 XGpio_DiscreteWrite(&LEDInst, LED_CHANNEL, output);
+		 vTaskDelay(x1SecondInTicks);
+	 }
+ }
+}
+
+static void taskSWS(void *taskSWSParams){
+	const TickType_t x1SecondInTicks = pdMS_TO_TICKS( DELAY_1_SECOND );
+
+	for(;;){
+		switch_data = XGpio_DiscreteRead(&InputInst, SW_CHANNEL);
+		if((switch_data & 0b0001) == 0b0001){
+			led_data = led_data - 1;
+			output = led_data;
+			XGpio_DiscreteWrite(&LEDInst, LED_CHANNEL, output);
+			vTaskDelay(x1SecondInTicks);
+		}
+	}
+}
+
+static void taskBTN( void *taskBTNParams ) {
+    const TickType_t x5SecondInTicks = pdMS_TO_TICKS( DELAY_5_SECOND);
+
+    for( ;; ) {
+        button_data = XGpio_DiscreteRead(&InputInst, BTN_CHANNEL);
+
+        //button 0 interrupt
+        if ((button_data & 0b0001) == 0b0001){
+            vTaskSuspend(taskHandleLED);
+        }
+        else if ((button_data & 0b0001) == 0b0000){
+           		vTaskResume(taskHandleLED);
+		}
+        //button 1 interrupt
+        if ((button_data & 0b0010) == 0b0010){
+            vTaskSuspend(taskHandleSWS);
+            vTaskResume(taskHandleLED);
+        }
+
+        else if ((button_data & 0b0010) == 0b0000){
+			vTaskResume(taskHandleSWS);
+		}
+        //button 2,3 interrupt
+        if((button_data & 0b1100) == 0b1100){
+        		vTaskSuspend(taskHandleLED);
+				vTaskSuspend(taskHandleSWS);
+				vTaskDelay(x5SecondInTicks); //5 second delay
+	           	vTaskResume(taskHandleLED);
+				vTaskResume(taskHandleSWS);
+        }
+    }
+}
+

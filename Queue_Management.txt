@@ -1,0 +1,101 @@
+
+// * AD1Pmod.c
+
+//AD1Pmod.c  PmodAD1 ADC example  
+#include "xparameters.h"
+#include "xil_io.h"
+#include <stdio.h>
+#include "platform.h"
+#include "xil_printf.h"
+#include <sleep.h>
+
+//AD1Pmod from Address Editor in Vivado
+#define AD1acq 	0x43C00000	//AD1 acquisition
+#define AD1dav 	0x43C00004	//AD1 data available
+#define AD1dat1	0x43C00008	//AD1 channel 1 data
+#define AD1dat2	0x43C0000C	//AD1 channel 2 data
+
+int main(void)
+{
+	int adcdav;				//ADC data available
+	int adcdat1;			//ADC channel 1 data
+	int	adcdat2;			//ADC channel 2 data
+
+
+	xil_printf("\n\rStarting AD1 Pmod demo test...\n");
+	Xil_Out32(AD1acq,0);
+	sleep(5);
+
+	while (1)
+	{
+		Xil_Out32(AD1acq,0);			//ADC stop acquire
+		adcdav=Xil_In32(AD1dav);		//ADC available?
+		while(adcdav==1)
+				adcdav=Xil_In32(AD1dav);
+
+		while(1)
+			{
+				Xil_Out32(AD1acq,1); 	//ADC acquire
+				while(adcdav==0)
+					adcdav=Xil_In32(AD1dav); //ADC data?
+				Xil_Out32(AD1acq,0);	//ADC stop acquire
+				adcdat1=Xil_In32(AD1dat1);
+				adcdat2=Xil_In32(AD1dat2);
+				while(adcdav==1)
+					adcdav=Xil_In32(AD1dav); //ADC reset?
+				xil_printf("%d  Ch1 \n ", adcdat2);
+				sleep(1);
+				
+				if(adcdat1<255){
+					led = 0b0000;
+				}
+				else if(adcdat1<511){
+					led = 0b0001;
+				}
+				else if(adcdat1<767){
+					led = 0b0010;
+				}
+				else if(adcdat1<1023){
+					led = 0b0011;
+					}
+				else if(adcdat1<1279){
+					led = 0b0100;
+				}
+				else if(adcdat1<1535){
+					led = 0b0101;
+				}
+				else if(adcdat1<1791){
+					led = 0b0110;
+					}
+				else if(adcdat1<2047){
+					led = 0b0111;
+					}
+				else if(adcdat1<2303){
+					led = 0b1000;
+				}
+				else if(adcdat1<2559){
+					led = 0b1001;
+				}
+				else if(adcdat1<2815){
+					led = 0b1010;
+					}
+				else if(adcdat1<3071){
+					led = 0b1011;
+				}
+				else if(adcdat1<3327){
+					led = 0b1100;
+				}
+				else if(adcdat1<3583){
+					led = 0b1101;
+					}
+				else if(adcdat1<3839){
+					led = 0b1110;
+				}
+				else{
+					led = 0b1111;
+					}
+			}
+	}
+}
+
+
